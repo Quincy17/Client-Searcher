@@ -1,0 +1,75 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model ScrapingSession {
+  id          Int      @id @default(autoincrement())
+  city        String
+  niche       String
+  limitCount  Int      @default(30) @map("limit_count")
+  status      String   @default("pending") // 'pending', 'running', 'done', 'failed'
+  totalFound  Int      @default(0) @map("total_found")
+  createdAt   DateTime @default(now()) @map("created_at")
+  leads       Lead[]
+
+  @@map("scraping_sessions")
+}
+
+model Lead {
+  id                 Int               @id @default(autoincrement())
+  sessionId          Int               @map("session_id")
+  session            ScrapingSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  name               String
+  address            String?
+  phone              String?
+  website            String?
+  rating             Float?
+  reviewCount        Int?              @map("review_count")
+  category           String?
+  instagramUrl       String?           @map("instagram_url")
+  hasWebsite         Boolean           @default(false) @map("has_website")
+  hasCustomEmail     Boolean           @default(false) @map("has_custom_email")
+  score              Int               @default(0)
+  recommendedService String?           @map("recommended_service")
+  status             String            @default("raw") // 'raw', 'scored', 'approved', 'rejected', 'contacted', 'replied', 'interested', 'proposal_sent', 'closed_won', 'closed_lost'
+  followUpCount      Int               @default(0) @map("follow_up_count")
+  notes              String?
+  createdAt          DateTime          @default(now()) @map("created_at")
+  updatedAt          DateTime          @updatedAt @map("updated_at")
+  outreachMessages   OutreachMessage[]
+  followUps          FollowUp[]
+
+  @@map("leads")
+}
+
+model OutreachMessage {
+  id          Int       @id @default(autoincrement())
+  leadId      Int       @map("lead_id")
+  lead        Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  messageText String    @map("message_text")
+  version     Int       @default(1)
+  approvedAt  DateTime? @map("approved_at")
+  waLink      String?   @map("wa_link")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@map("outreach_messages")
+}
+
+model FollowUp {
+  id         Int      @id @default(autoincrement())
+  leadId     Int      @map("lead_id")
+  lead       Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  actionType String   @map("action_type") // 'contacted', 'follow_up', 'replied', 'no_reply', 'closed'
+  channel    String   @default("whatsapp") // 'whatsapp', 'email', 'other'
+  notes      String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("follow_ups")
+}
