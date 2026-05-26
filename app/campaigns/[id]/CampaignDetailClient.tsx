@@ -383,12 +383,12 @@ export function CampaignDetailClient({ sessionId }: { sessionId: number }) {
           <select
             value={scoreFilter}
             onChange={(e) => setScoreFilter(e.target.value)}
-            className="w-full bg-[rgba(0,0,0,0.2)] border border-[rgba(255,255,255,0.05)] rounded-xl px-3 py-2 text-xs font-semibold text-gray-300 outline-none focus:border-violet-500/40"
+            className="w-full bg-[#0b0816] border border-white/5 rounded-xl px-3 py-2 text-xs font-semibold text-gray-400 outline-none focus:border-violet-500/20 cursor-pointer"
           >
-            <option value="all">Semua Skor</option>
-            <option value="high">High Potency (&ge; 100)</option>
-            <option value="medium">Medium Potency (60-99)</option>
-            <option value="low">Low Potency (&lt; 60)</option>
+            <option value="all" className="bg-[#0b0816] text-gray-400">Semua Skor</option>
+            <option value="high" className="bg-[#0b0816] text-gray-400">High Potency (&ge; 100)</option>
+            <option value="medium" className="bg-[#0b0816] text-gray-400">Medium Potency (60-99)</option>
+            <option value="low" className="bg-[#0b0816] text-gray-400">Low Potency (&lt; 60)</option>
           </select>
         </div>
 
@@ -400,13 +400,13 @@ export function CampaignDetailClient({ sessionId }: { sessionId: number }) {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="w-full bg-[rgba(0,0,0,0.2)] border border-[rgba(255,255,255,0.05)] rounded-xl px-3 py-2 text-xs font-semibold text-gray-300 outline-none focus:border-violet-500/40"
+            className="w-full bg-[#0b0816] border border-white/5 rounded-xl px-3 py-2 text-xs font-semibold text-gray-400 outline-none focus:border-violet-500/20 cursor-pointer"
           >
-            <option value="all">Semua Status</option>
-            <option value="scored">Scored (Belum Review)</option>
-            <option value="approved">Approved (Siap WA)</option>
-            <option value="contacted">Contacted (Sudah Hubungi)</option>
-            <option value="rejected">Rejected (Dilewati)</option>
+            <option value="all" className="bg-[#0b0816] text-gray-400">Semua Status</option>
+            <option value="scored" className="bg-[#0b0816] text-gray-400">Scored (Belum Review)</option>
+            <option value="approved" className="bg-[#0b0816] text-gray-400">Approved (Siap WA)</option>
+            <option value="contacted" className="bg-[#0b0816] text-gray-400">Contacted (Sudah Hubungi)</option>
+            <option value="rejected" className="bg-[#0b0816] text-gray-400">Rejected (Dilewati)</option>
           </select>
         </div>
 
