@@ -35,7 +35,7 @@ export default function NewCampaignPage() {
     "Kontraktor Jasa",
   ];
 
-  const cityPresets = ["Jakarta", "Surabaya", "Bandung", "Bali", "Medan", "Semarang"];
+  const cityPresets = ["Jakarta", "Bandung", "Malang", "Surabaya", "Bali", "Medan", "Semarang"];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -27,6 +27,7 @@ export async function generateProposal(lead: LeadData): Promise<ProposalGenerati
   const modelName = process.env.GEMINI_MODEL || "gemini-1.5-flash"; // gemini-1.5-flash or gemini-2.0-flash support free tier
 
   const promptVars = getPromptData(lead);
+  const portfolioUrl = "https://caesariannn.npd-agency.org";
   
   // Construct the prompt by replacing placeholders
   const userPrompt = `
@@ -42,19 +43,18 @@ Silakan generate proposal outreach untuk bisnis berikut:
 
   // Fallback template generator in case the API key is not configured
   const getFallbackTemplate = (): ProposalGenerationResult => {
-    const portfolioUrl = "https://YOUR_DOMAIN/assets/agency-profile.pdf";
     const webStatus = lead.hasWebsite 
       ? "website resmi Anda kurang responsif atau hanya berupa link bio media sosial"
       : "belum memiliki website resmi untuk {name}";
     
     let messageText = `Halo Kak Pemilik ${lead.name},\n\n`;
-    messageText += `Perkenalkan saya dari Tim Agency IT. Kemarin saya sempat mencari ${lead.category || "bisnis menarik"} di area ${lead.city} lewat Google Maps, dan saya melihat ${lead.name} memiliki ulasan yang luar biasa (${lead.rating || "bagus"} bintang)! ⭐\n\n`;
+    messageText += `Perkenalkan saya Farrel Caesarian dari NPD Agency. Kemarin saya sempat mencari ${lead.category || "bisnis menarik"} di area ${lead.city} lewat Google Maps, dan saya melihat ${lead.name} memiliki ulasan yang luar biasa (${lead.rating || "bagus"} bintang).\n\n`;
     
     if (!lead.hasWebsite) {
-      messageText += `Saat mencoba cari tahu lebih lanjut, kami perhatikan ${lead.name} belum memiliki website resmi. Di era digital sekarang, memiliki website sendiri sangat penting untuk meningkatkan kredibilitas dan memudahkan pelanggan di ${lead.city} melihat menu/layanan serta melakukan booking langsung secara online. 🚀\n\n`;
+      messageText += `Saat mencoba cari tahu lebih lanjut, kami perhatikan ${lead.name} belum memiliki website resmi. Di era digital sekarang, memiliki website sendiri sangat penting untuk meningkatkan kredibilitas dan memudahkan pelanggan di ${lead.city} melihat menu/layanan serta melakukan booking langsung secara online.\n\n`;
       messageText += `Untuk ${lead.name}, kami sangat merekomendasikan **${lead.recommendedService}** agar pesanan atau booking pelanggan bisa otomatis masuk via WhatsApp secara rapi.\n\n`;
     } else {
-      messageText += `Kami perhatikan ${lead.name} sudah punya link profil digital, namun tampaknya belum dioptimalkan sebagai landing page penjualan utama. Dengan **${lead.recommendedService}**, kita bisa meningkatkan konversi kunjungan menjadi closing penjualan dengan lebih cepat! 🎯\n\n`;
+      messageText += `Kami perhatikan ${lead.name} sudah punya link profil digital, namun tampaknya belum dioptimalkan sebagai landing page penjualan utama. Dengan **${lead.recommendedService}**, kita bisa meningkatkan konversi kunjungan menjadi closing penjualan dengan lebih cepat.\n\n`;
     }
     
     messageText += `Sebagai perkenalan, kami sedang mengadakan program gratis pembuatan mockup/gambaran awal website khusus untuk bisnis terpilih di ${lead.city}. Boleh kami buatkan mockup gratis untuk ${lead.name}? Anda bisa melihat beberapa portfolio kami di sini: ${portfolioUrl}\n\n`;
@@ -95,9 +95,13 @@ Silakan generate proposal outreach untuk bisnis berikut:
     }
 
     const jsonOutput = JSON.parse(textResponse.trim());
+    let messageText = jsonOutput.messageText || getFallbackTemplate().messageText;
+    
+    // Dynamically replace the [link_portfolio] placeholder from Gemini with the real portfolio URL
+    messageText = messageText.replace(/\[link_portfolio\]/g, portfolioUrl);
     
     return {
-      messageText: jsonOutput.messageText || getFallbackTemplate().messageText,
+      messageText,
       miniAudit: jsonOutput.miniAudit || getFallbackTemplate().miniAudit,
       isMock: false,
     };
