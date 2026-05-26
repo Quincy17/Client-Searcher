@@ -1,112 +1,175 @@
-# Handover Plan: Lead Generation & Outreach Automation System
+# Dokumentasi Teknis & Alur Penggunaan: ClientSearcher
 
-Selamat! Seluruh sistem **Lead Generation & WhatsApp Outreach Automation** telah berhasil diimplementasikan, dikonfigurasi secara optimal dengan spesifikasi terbaru **Prisma 7 (Driver Adapter)**, dan berhasil dikompilasi 100% tanpa error (`Exit Code: 0`). 
+Selamat! Seluruh sistem **ClientSearcher - Lead Generation & WhatsApp Outreach Automation** telah berhasil diimplementasikan, dikonfigurasi secara optimal dengan spesifikasi terbaru **Prisma 7 (Driver Adapter)**, dan berhasil dikompilasi 100% tanpa error (`Exit Code: 0`). 
 
-Sistem ini dirancang khusus untuk IT Agency Anda guna melakukan pencarian prospek (*discovery*) secara masif di Google Maps, menyaring (*scoring*) berdasarkan kehadiran digital mereka, menghasilkan draf penawaran WhatsApp personal dengan **Gemini 3.1 Flash**, serta melacak perkembangan *deals* secara visual melalui **CRM Kanban Pipeline**.
+Dokumen ini menjelaskan secara mendalam arsitektur teknis (*Technology Stack*) yang digunakan serta alur penggunaan sistem (*User Workflow*) secara menyeluruh dari proses scraping Google Maps hingga closing klien di CRM.
 
 ---
 
-## 🛠️ Stack Teknologi & Detail Arsitektur
+## 🛠️ 1. Detail Mendalam Technology Stack & Arsitektur
+
+Sistem dirancang dengan arsitektur modern berkecepatan tinggi yang memisahkan tugas berat di latar belakang (*background headless crawling*) dengan antarmuka dinamis (*real-time dashboard UI*) yang sangat interaktif.
 
 ```mermaid
 graph TD
-    A[Playwright Maps Scraper] -->|1. Discovery| B[(SQLite Database)]
-    B -->|2. Web Crawler & Social Extractor| C[AI Scorer & Matcher]
-    C -->|3. Hitung Skor & Layanan IT| D[Gemini 3.1 Flash API]
-    D -->|4. Copywriting Kustom| B
-    B -->|5. Sync Real-time| E[Next.js App Router UI]
-    E -->|6. Review & Approve| F[Human-in-the-Loop]
-    F -->|7. Kirim WhatsApp Web/App| G[WA.me Deep Link]
+    subgraph Frontend [Next.js Client UI - React 19]
+        UI_Dash[Dashboard Overview /]
+        UI_Form[Form Scrape /campaigns/new]
+        UI_Detail[Live Review Table /campaigns/id]
+        UI_CRM[Kanban Board /crm]
+    end
+
+    subgraph Backend_APIs [API Route Handlers]
+        API_Scrape[API /api/scrape]
+        API_Poll[API /api/sessions/id]
+        API_Outreach[API /api/outreach]
+        API_Regen[API /api/generate]
+        API_Leads[API /api/leads/id]
+    end
+
+    subgraph Database_Layer [Database & Driver Adapter]
+        P7[Prisma 7 Client]
+        PA[PrismaBetterSqlite3 Adapter]
+        BS3[better-sqlite3 Native Driver]
+        DB[(SQLite File dev.db)]
+    end
+
+    subgraph Background_Workers [Crawler & AI Engines]
+        PW[Playwright Stealth Maps Scraper]
+        CRAWL[Secondary Website Crawler]
+        MATCH[AI Scoring & Service Matcher]
+        GEMINI[Gemini 3.1 Flash API]
+    end
+
+    UI_Form -->|POST city, niche, limit| API_Scrape
+    API_Scrape -->|Trigger Async Worker| PW
+    PW -->|Search Maps & Div Scroll| DB
+    PW -->|Fetch Website HTML| CRAWL
+    CRAWL -->|Extract Instagram URL| DB
+    MATCH -->|Calculate Digital Score| DB
+    GEMINI -->|Draft WA Copywriting| DB
+    
+    UI_Detail -->|GET polling every 2s| API_Poll
+    API_Poll -->|Read progress| DB
+
+    UI_Detail -->|Regenerate Proposal| API_Regen
+    API_Regen -->|Call Gemini| GEMINI
+
+    UI_Detail -->|Buka WhatsApp & Log Clicks| API_Outreach
+    API_CRM -->|Drag & Drop Dropdown Transitions| API_Leads
+    
+    API_Outreach -->|Update status & followUpCount| P7
+    API_Leads -->|Update Lead & Notes| P7
+    
+    P7 -->|Query native via| PA
+    PA -->|Read/Write| BS3
+    BS3 -->|Disk Access| DB
 ```
 
-### 1. Database & Prisma 7 Driver Adapter
-Untuk kemudahan instalasi ("zero-install"), sistem menggunakan **SQLite** (`dev.db`). Karena **Prisma 7** tidak lagi mengizinkan property `url` didefinisikan langsung dalam `schema.prisma`, arsitektur database kami buat sangat rapi dan *future-proof* menggunakan model **Driver Adapter**:
-* **Konfigurasi Schema**: [schema.prisma](file:///d:/Work/Client-Searcher/prisma/schema.prisma) mendefinisikan provider `sqlite` secara murni.
-* **Driver Adapter**: [prisma.ts](file:///d:/Work/Client-Searcher/lib/db/prisma.ts) mengimpor `@prisma/adapter-better-sqlite3` and `better-sqlite3` untuk menginisialisasi koneksi file lokal SQLite secara native.
-* **Konfigurasi Migrasi**: [prisma.config.ts](file:///d:/Work/Client-Searcher/prisma.config.ts) mengarah ke variabel lingkungan `DATABASE_URL="file:./dev.db"`.
+### A. Core Web Framework: Next.js 16 (React 19)
+* **App Router Architecture**: Kami memanfaatkan struktur App Router terbaru. Semua file rute halaman diatur di dalam direktori `app/`, mengoptimalkan pemisahan Server Components dan Client Components (`'use client'`).
+* **Direct Server Querying**: Pada halaman utama dashboard (`/`), daftar kampanye (`/campaigns`), dan halaman CRM (`/crm`), kami menggunakan **Next.js Server Components** untuk melakukan kueri database secara langsung melalui Prisma pada saat halaman dirender di server. Hal ini meniadakan latensi request HTTP client-side tambahan, mempercepat waktu render awal (*Initial Page Load*), dan ramah terhadap SEO.
+* **Turbopack Bundler**: Sistem dikompilasi menggunakan compiler Turbopack Next.js berkinerja tinggi berbasis Rust yang menawarkan *hot module reloading* instan dalam hitungan milidetik.
 
-### 2. Playwright Scraper Engine (`/lib/scraper/`)
-* **stealth.ts**: Menghindari *bot detection* menggunakan rotasi User-Agent, manipulasi evasive headers (WebRTC, webdriver bypass), dan jeda acak (*randomized human-like delays*).
-* **extractor.ts**: Menarik data nama bisnis, alamat, rating, jumlah ulasan, kategori, nomor telepon, dan link website. Jika website ditemukan, crawler sekunder akan mengunduh HTML dan mengekstrak link profil Instagram bisnis tersebut.
-* **playwright.ts**: Koordinator browser yang membuka Maps, menggulir (*scrolling*) panel daftar bisnis, detail secara berurutan, memicu kalkulasi skor, memicu pembuatan proposal Gemini, dan menulis progress status ke DB.
+### B. Styling & Design System: Tailwind CSS v4
+* **Deep Space Aesthetics**: Antarmuka dipoles menggunakan Tailwind CSS v4 dengan mode gelap bawaan (*dark mode by default*). Palet warna mengandalkan warna latar belakang angkasa gelap (`#080710`), aksen neon indigo/violet kustom, serta batas-batas transparan halus untuk efek **Glassmorphism**.
+* **Inline Theme configuration**: Token desain kustom (seperti `color-card-bg`, `color-primary-color`, `glass-panel-glow`) diintegrasikan secara elegan di dalam berkas [globals.css](file:///d:/Work/Client-Searcher/app/globals.css) menggunakan direktif `@theme inline` baru dari Tailwind CSS v4.
+* **Micro-Animations**: Kami menyertakan transisi halus pada status hover kartu, animasi berdenyut (*pulsating glow*) untuk tombol Gemini AI, animasi pemuatan kustom (*shimmer loading effect*), dan animasi berputar (*loader spin*) untuk antarmuka yang sangat responsif dan terasa hidup.
 
-### 3. Algoritma Digital Audit & Scoring (`/lib/scorer/`)
-Setiap lead dinilai secara otomatis hingga maksimal **150 poin** untuk menyaring klien dengan potensi closing tertinggi:
-* **Tidak Memiliki Website**: `+40 Poin` (Kebutuhan utama pembuatan landing page).
-* **Website Berupa Link Bio saja (Linktree, dll)**: `+30 Poin` (Sangat membutuhkan website mandiri).
-* **Ulasan Google Maps > 20**: `+15 Poin` (Bisnis aktif dan punya pelanggan tetapi minus presence digital).
-* **Rating Google Maps > 4.0**: `+20 Poin` (Reputasi baik, memiliki anggaran bisnis).
-* **Mencantumkan Instagram**: `+10 Poin` (Bisnis peduli branding visual tetapi belum punya website resmi).
-* **Domain Email Gratisan (Gmail/Yahoo)**: `+15 Poin` (Membutuhkan domain email profesional kustom).
-* **Layanan IT yang Direkomendasikan**: `/lib/scorer/service-matcher.ts` mencocokkan kategori bisnis dengan layanan IT yang tepat (misal: *Restoran & Cafe* &rarr; *Menu Digital QR + Landing Page*, *Klinik Kecantikan* &rarr; *Web Booking System*).
+### C. Database Engine: Prisma 7 & Driver Adapter SQLite
+Prisma 7 membawa perubahan besar di mana runtime query engine internal (binary) telah sepenuhnya dipisahkan dari inti library demi mendukung performa optimal di lingkungan edge. Oleh karena itu, koneksi SQLite dikonfigurasi menggunakan arsitektur **Driver Adapter**:
+1. **better-sqlite3**: Driver native Node.js tercepat untuk SQLite di Windows/Linux yang mengeksekusi kueri langsung ke memori / disk tanpa overhead protokol jaringan.
+2. **@prisma/adapter-better-sqlite3**: Adapter resmi Prisma 7 yang menjembatani struktur query AST Prisma dengan pustaka `better-sqlite3`.
+3. **Pemisahan Konfigurasi**:
+   * File [schema.prisma](file:///d:/Work/Client-Searcher/prisma/schema.prisma) hanya mendefinisikan database provider sebagai `sqlite`. Ia tidak memiliki properti `url` statis (karena Prisma 7 melarangnya dalam berkas schema guna meningkatkan modularitas).
+   * File [prisma.config.ts](file:///d:/Work/Client-Searcher/prisma.config.ts) di root folder bertugas memuat berkas konfigurasi `.env` dan menyuplai parameter `url: process.env["DATABASE_URL"]` (berisi `"file:./dev.db"`) untuk kebutuhan migrasi CLI (`npx prisma db push`).
+   * File instansiasi [prisma.ts](file:///d:/Work/Client-Searcher/lib/db/prisma.ts) membaca berkas database `dev.db` secara dinamis, menginisialisasi instansi `Database` dan `PrismaBetterSqlite3`, lalu meneruskannya sebagai objek `{ adapter }` ke konstruktor `new PrismaClient()`.
 
-### 4. AI Proposal Service (`/lib/ai/`)
-Menghubungkan aplikasi dengan **Gemini 3.1 Flash** menggunakan SDK `@google/generative-ai` dengan mode terstruktur (`responseMimeType: "application/json"`).
-* **Copywriting Kustom**: Pesan pembuka WhatsApp ramah berbahasa Indonesia, diawali dengan pujian ulasan positif mereka di Google Maps, menyoroti celah digital mereka (misal: belum punya website resmi atau email kustom), dan menawarkan solusi relevan dengan gaya *soft-selling*.
-* **Resilient Fallback**: Jika API key Gemini kosong, sistem otomatis mengaktifkan generator teks lokal berkualitas tinggi sehingga aplikasi tetap berjalan lancar dan interaktif.
+### D. Scraper & Crawler Engine: Playwright Stealth
+Modul penemu prospek terletak di `/lib/scraper/` dan dikoordinasikan secara asinkronus:
+* **stealth.ts**: Mengintegrasikan konfigurasi anti-bot tingkat lanjut. Ia melakukan rotasi acak User-Agent modern, menyuntikkan evasive headers untuk menyembunyikan flag otomatisasi (seperti `navigator.webdriver`), mengontrol sidik jari browser (WebRTC, plugin palsu), serta menerapkan waktu jeda acak manusiawi (*humanized delay* berkisar 1.5 - 3 detik) di setiap interaksi klik atau gulir halaman.
+* **extractor.ts**: Pustaka ekstraktor DOM Google Maps yang stabil. Ia membaca elemen teks nama bisnis, alamat, rating bintang, jumlah ulasan, kategori industri, nomor telepon, dan URL website resmi.
+* **Secondary Website Crawler (HTML Instagram Extractor)**: Jika suatu bisnis memiliki website resmi, crawler akan memicu request HTTP GET latar belakang secara asinkronus untuk mengunduh source code HTML website tersebut. Menggunakan pencarian ekspresi reguler (Regex) berkinerja tinggi, crawler mencari pola link media sosial Instagram (`instagram.com/username`) dan menyimpannya ke database sebagai saluran alternatif outreach jika nomor telepon mereka tidak terdaftar.
+* **playwright.ts**: Pengendali browser utama. Ia membuka halaman Google Maps dengan query kustom (misal: "restoran di surabaya"), mencari container panel gulir daftar maps (`div[role="feed"]`), menggulir ke bawah secara rekursif hingga mencapai batas leads limit, mengklik detail bisnis satu per satu secara berurutan, lalu memicu proses scoring & AI proposal copywriting secara paralel di latar belakang.
+
+### E. AI Proposal Engine: Gemini 3.1 Flash API
+Sistem copywriting diatur di `/lib/ai/` menggunakan model terbaru dari Google:
+* **Gemini 3.1 Flash (gemini-1.5-flash / gemini-2.0-flash)**: Model AI berkecepatan tinggi dengan kuota *free tier* melimpah dan mendukung keluaran data terstruktur JSON secara native (`responseMimeType: "application/json"`).
+* **JSON Structured Prompting**: Prompt AI diatur ketat di [prompts.ts](file:///d:/Work/Client-Searcher/lib/ai/prompts.ts). AI dipaksa memberikan output berformat JSON berisi teks outreach WhatsApp bersahabat dalam Bahasa Indonesia dan ulasan audit singkat 1-2 kalimat mengenai kehadiran digital prospek.
+* **Contextual Copywriting**: Prompt menyuplai detail digital audit lead secara mendalam (misal: nama bisnis, kategori, kota, rating, apakah tidak punya website, apakah email mereka masih menggunakan Gmail gratisan, dan layanan IT apa yang disarankan). Gemini memformulasikan pesan yang sangat personal:
+  1. *Apresiasi*: Memuji bisnis prospek (menyebutkan rating/ulasan positif mereka di Maps).
+  2. *Empati*: Menyoroti pentingnya presence digital di kota target mereka saat ini.
+  3. *Problem Solving*: Menyebutkan secara halus celah digital mereka (misal: "saya menyadari Klinik Kecantikan Ibu saat ini belum memiliki landing page resmi untuk sistem booking jadwal tindakan...").
+  4. *Penawaran*: Menawarkan solusi pembuatan web booking/menu QR otomatis yang relevan dengan bisnis mereka dengan ajakan diskusi santai via WA (*Call to Action*).
+* **Robust Fallback Generator**: Jika berkas `.env` tidak memiliki API key Gemini, sistem otomatis memicu modul fallback di [proposal.ts](file:///d:/Work/Client-Searcher/lib/ai/proposal.ts) untuk menghasilkan teks draf kustom lokal berkualitas tinggi, mencegah crash dan menjaga agar demo aplikasi tetap berjalan 100% interaktif.
 
 ---
 
-## 💻 Struktur Menu & UI Dashboards
+## 🔄 2. Alur Penggunaan Sistem Secara End-to-End
 
-Sistem dibalut dengan desain **Deep Space Dark Theme** yang elegan, aksen neon violet glassmorphism, visual mikro-animasi, dan scrollbar kustom.
+Berikut adalah siklus hidup penggunaan sistem dari mulai penelusuran leads hingga deal closing:
 
-1. **Dashboard Overview (`/`)**:
-   * Statistik ringkas: Total leads ter-scrape, rata-rata skor potensi, approved proposal, total contacted, dan deal won.
-   * Tabel aktivitas pencarian terakhir beserta status chips (`running`, `done`, `failed`).
-   * Tombol pintas alur kerja penemuan klien.
-2. **Kampanye List (`/campaigns`)**:
-   * Menampilkan semua kartu riwayat pencarian.
-   * Dilengkapi kolom pencarian keyword *niche* atau kota secara instan.
-   * Mendukung penghapusan sesi kampanye secara penuh beserta seluruh leads terkait via API DELETE (`Cascade`).
-3. **Mulai Scrape Baru (`/campaigns/new`)**:
-   * Formulir konfigurasi untuk kota dan industri.
-   * Tersedia chips preset kategori (misal: *Klinik Gigi, Cafe, Barbershop*) dan kota utama (misal: *Jakarta, Surabaya, Bandung*).
-   * Slider interaktif untuk membatasi jumlah leads (5 s.d 30 leads).
-   * Fitur pencegah tumpang tindih (*lock mechanism*) &rarr; menginfokan user secara ramah jika ada proses scraper lain yang sedang aktif berjalan.
-4. **Detail Leads & Review Room (`/campaigns/[id]`)**:
-   * **Live Polling**: Halaman melakukan *polling* ke server setiap 2 detik ketika status scraper `running`. leads yang berhasil ditemukan akan langsung masuk ke tabel secara real-time!
-   * **Bagan Accordion**: Baris lead dapat diklik untuk membuka **Audit Panel**:
-     * *Kiri (Audit Kehadiran)*: Menampilkan alamat, telepon, web, instagram, rincian skor, layanan rekomendasi, dan *CRM Notes editor* yang tersimpan otomatis saat kursor keluar (*onBlur*).
-     * *Kiri (Gemini Outreach)*: Textarea draf teks WA yang dapat direvisi secara langsung. Tersedia tombol **Regenerate** (meminta Gemini menulis ulang proposal dengan versi baru), **Reject** (tolak lead), **Approve** (tandai siap dikirim), dan **Buka WA** (membuka deep link `wa.me`, mencatat log aktivitas di DB, serta mengubah status lead menjadi `contacted` secara otomatis).
-5. **CRM Kanban Board (`/crm`)**:
-   * Papan visual interaktif yang mengelompokkan leads dari **semua kampanye** ke dalam 5 kolom penjualan utama:
-     1. *Inbox / Prospek Baru* (Status: `raw`, `scored`) &rarr; Tombol cepat *Approve*.
-     2. *Siap Outreach* (Status: `approved`) &rarr; Tombol cepat *Kirim WA*.
-     3. *Outreach Terkirim* (Status: `contacted`) &rarr; Menampilkan frekuensi follow-up dan tombol cepat *Merespons*.
-     4. *Negosiasi Aktif* (Status: `replied`, `interested`, `proposal_sent`) &rarr; Kontrol cepat *Kirim Proposal*, *Deal Won*, atau *Lost*.
-     5. *Closing Deal* (Status: `closed_won`, `closed_lost`) &rarr; Indikator visual kesuksesan.
-   * Klik pada kartu lead mana saja akan membuka **Glassmorphic Sidebar Modal** untuk mengedit catatan CRM secara langsung dan mengubah detail status penawaran secara komprehensif.
-
----
-
-## 🚀 Panduan Menjalankan Sistem Secara Lokal
-
-Ikuti langkah mudah di bawah ini untuk memulai sistem di komputer Anda:
-
-### 1. Konfigurasi Kunci API Gemini
-Buka file [.env](file:///d:/Work/Client-Searcher/.env) di root direktori Anda dan tambahkan API Key Gemini Anda:
-```env
-GEMINI_API_KEY="ISI_API_KEY_GEMINI_ANDA_DI_SINI"
-DATABASE_URL="file:./dev.db"
 ```
-> [!NOTE]
-> Anda dapat memperoleh API Key gratis untuk model Gemini 3.1 Flash langsung dari [Google AI Studio](https://aistudio.google.com/).
-
-### 2. Jalankan Mode Development
-Buka terminal PowerShell Anda di direktori `d:\Work\Client-Searcher` dan jalankan server Next.js lokal:
-```powershell
-npm run dev
+[ Form Input Baru ] ──► [ Lock Check ] ──► [ Playwright Scraper ] ──► [ Web Crawl & IG Extractor ]
+                                                                                │
+[ Live Polling ] ◄─── [ Gemini AI Proposal ] ◄─── [ Algorithm Scoring ] ◄───────┘
+       │
+[ Human Audit ] ──► [ Edit Text ] ──► [ Approve ] ──► [ Buka WA Web ] ──► [ Kanban CRM Board ]
+                                                                                │
+                                                                       [ Deal Won / Lost ]
 ```
-Setelah berjalan, buka browser Anda dan akses **[http://localhost:3000](http://localhost:3000)**.
 
-### 3. Cara Menguji Alur Kerja Lengkap
-1. Masuk ke halaman **Scrape Campaign** &rarr; Klik **Mulai Pencarian Baru**.
-2. Masukkan kata kunci pencarian, misalnya:
-   * **Niche**: `Klinik Kecantikan`
-   * **Kota**: `Surabaya`
-   * **Limit**: `10`
-3. Klik **Jalankan Pencarian Prospek**. Anda akan otomatis diarahkan ke halaman detail kampanye.
-4. **Lihat Keajaibannya**: Anda akan melihat status scraper berkedip "Scraping Sedang Berjalan...". Secara berkala setiap beberapa detik, baris leads baru akan muncul satu per satu di layar lengkap dengan skor potensi, layanan IT yang disarankan, dan draf pesan WhatsApp kustom dari Gemini!
-5. Klik salah satu baris bisnis yang paling berpotensi (Skor tinggi, misalnya >100) &rarr; Edit draf pesan jika perlu &rarr; Klik **Approve Pesan** &rarr; Klik **Buka WA**. WhatsApp Web/App akan terbuka dengan pesan kustom terisi otomatis, dan status lead di dashboard seketika berubah menjadi `contacted` dengan log ter-update!
-6. Buka menu **CRM Pipeline** untuk memantau kelanjutan negosiasi sales Anda dengan prospek tersebut hingga closing!
+### Fase 1: Inisiasi Kampanye & Concurrency Lock
+1. Pengguna membuka halaman **Scrape Campaign** dan mengklik **Mulai Pencarian Baru** (`/campaigns/new`).
+2. Pengguna mengisi **Niche / Industri** target (misal: "klinik gigi"), **Kota / Lokasi** (misal: "Bandung"), dan menggeser **Limit Leads** (5 - 30 leads).
+3. Saat tombol **Jalankan Pencarian Prospek** ditekan, form mengirimkan request POST ke `/api/scrape`.
+4. **Pencegah Konflik (Lock Check)**: API mengecek status kampanye di database. Jika ada kampanye lain yang masih berstatus `running`, request baru akan ditolak dengan pesan peringatan: *"Scraper sedang berjalan untuk pencarian lain. Harap tunggu hingga selesai agar tidak terjadi bentrokan resource browser."*
+5. Jika aman, API akan membuat baris baru di tabel `scraping_sessions` dengan status `running` dan memicu fungsi asinkronus Playwright di latar belakang. API langsung mengembalikan respons sukses instan berupa objek `{ session: { id } }` kepada klien tanpa memblokir browser user (asynchronous background execution).
+6. Halaman otomatis dialihkan ke halaman detail leads review (`/campaigns/[id]`).
+
+### Fase 2: Headless Scrape & Crawling Latar Belakang
+1. Browser Chromium headless (Playwright) terbuka dan menavigasi ke Google Maps.
+2. Playwright memasukkan kata kunci penelusuran secara dinamis (misal: `klinik gigi di Bandung`).
+3. Sistem mendeteksi panel kiri maps dan mulai melakukan scroll ke bawah secara bertahap. Jeda acak 1.5 detik diterapkan setiap kali scroll untuk memicu lazy-loading daftar listing tanpa dicurigai sebagai bot.
+4. Setelah mengumpulkan URL tempat bisnis sesuai limit (misal: 15 leads), browser akan memproses URL tersebut secara berurutan.
+5. Browser mengklik detail bisnis, mengekstrak data nama, rating, ulasan, telepon, alamat, dan website resmi.
+6. **Trigger Secondary Crawler**: Jika properti website terdeteksi dan merupakan website mandiri, modul web crawler asinkronus dijalankan untuk mengunduh HTML website dan memindai tag jangkar `href` yang mengarah ke Instagram guna menangkap username sosial media mereka.
+
+### Fase 3: Scoring & AI Copywriting Otomatis
+1. Setelah data bisnis dan instagram lengkap diekstrak oleh Playwright, sistem memanggil modul **AI Scorer** (`/lib/scorer/algorithm.ts`).
+2. Skor dihitung secara otomatis berdasarkan 6 parameter kehadiran digital dan layanan IT yang direkomendasikan langsung ditentukan berdasarkan kategori bisnis.
+3. Bisnis disimpan ke tabel `leads` database dengan status awal `scored`.
+4. Sistem memanggil modul **Gemini AI Proposal** (`/lib/ai/proposal.ts`) dengan menyuplai context data bisnis yang telah diaudit.
+5. Gemini menyusun teks proposal WhatsApp personal dalam Bahasa Indonesia yang membujuk dan ramah. Teks proposal ini ditulis ke dalam tabel `outreach_messages` dengan `version: 1` yang berelasi dengan data lead tersebut.
+6. Kolom progress `totalFound` pada sesi kampanye di database dinaikkan sebesar `+1`.
+
+### Fase 4: Live Polling & Human-in-the-Loop Audit
+1. Selagi browser Playwright bekerja keras di latar belakang, halaman detail leads klien (`/campaigns/[id]`) mendeteksi status kampanye `running`.
+2. **Real-time Sync**: Komponen klien memicu fungsi *interval polling* ke API `/api/sessions/[id]` setiap 2 detik.
+3. Setiap kali database mencatat pertambahan leads baru dari proses Playwright, baris tabel detail kampanye di layar pengguna akan bertambah secara instan secara real-time tanpa perlu me-refresh halaman! Pengguna dapat memantau baris demi baris lead masuk lengkap dengan badge skor potensinya.
+4. Setelah Playwright selesai memproses seluruh limit leads, status kampanye di database diubah menjadi `done`, dan halaman detail otomatis menghentikan kueri polling latar belakang.
+5. **Human-in-the-Loop Review**: Pengguna mengklik salah satu baris leads untuk memperluas baris (*accordion drawer*). Panel audit visual yang canggih terbuka:
+   * **Bagan Kiri (Audit)**: Pengguna meninjau rincian poin skor digital, tautan alamat/telepon/web, serta dapat menuliskan catatan operasional di kolom **Catatan Tim CRM** (kolom ini memiliki autosave trigger `onBlur` ke API `/api/leads/[id]` PATCH untuk menjaga data tetap tersimpan saat pengguna mengetik).
+   * **Bagan Kanan (AI Text Review)**: Pengguna membaca pesan WhatsApp kustom yang dihasilkan AI di dalam textarea yang dapat diedit langsung.
+     * Jika pesan kurang pas, pengguna dapat merevisinya secara manual.
+     * Jika ingin draf baru, pengguna mengklik tombol **Regenerate** (membuat request ke `/api/generate`). Sistem memanggil Gemini AI untuk merumuskan kembali pesan yang baru, menyimpan pesan baru tersebut di DB dengan `version: 2` (riwayat versi tetap dipertahankan), dan memuat teks baru tersebut ke textarea secara instan.
+
+### Fase 5: WhatsApp Outreach & Click Tracking
+1. Setelah draf pesan WhatsApp dirasa sudah sempurna, pengguna mengklik tombol **Approve Pesan**.
+2. API `/api/leads/[id]` dipanggil untuk memperbarui status lead di database dari `scored` menjadi `approved`, serta mengunci teks pesan terakhir yang disetujui.
+3. Tombol **Buka WA** yang berwarna hijau cerah akan aktif.
+4. Pengguna mengklik tombol **Buka WA**:
+   * Sistem mengirimkan request POST latar belakang ke API `/api/outreach`.
+   * API akan meningkatkan angka `followUpCount` lead sebanyak `+1`, mencatat riwayat tindakan di tabel `follow_ups` dengan status channel `whatsapp` dan aksi `contacted`, serta memperbarui status lead utama menjadi `contacted`.
+   * Di saat yang sama, aplikasi membuka tab browser baru mengarah ke deep-link URL `wa.me` internasional (nomor telepon otomatis diformat ke kode negara `628xxx` dan teks proposal kustom di-encode secara aman) guna membuka aplikasi WhatsApp Web atau desktop Anda dengan teks pesan yang sudah terisi otomatis!
+   * Pengguna tinggal menekan tombol "Kirim" di aplikasi WhatsApp mereka.
+
+### Fase 6: Kanban CRM Pipeline & Deals Lifecycle
+1. Pengguna membuka menu **CRM Pipeline** (`/crm`) untuk memantau kemajuan tindak lanjut dari seluruh kampanye secara kolektif.
+2. Leads dari semua kampanye dikelompokkan ke dalam 5 kolom Kanban visual yang luas.
+3. Saat prospek membalas pesan WhatsApp di HP Anda, pengguna dapat memperbarui kemajuan kualifikasi prospek langsung dari kartu CRM:
+   * Jika prospek membalas santai, klik **Merespons** untuk memindahkannya ke kolom **Negosiasi Aktif** (status DB: `replied`).
+   * Jika prospek meminta penawaran resmi, klik **Proposal** di kartu untuk mengubah statusnya menjadi `proposal_sent`.
+   * Jika negosiasi sukses dan prospek setuju bekerja sama membuat website/layanan IT dengan agency Anda, klik **Won** untuk memindahkannya ke kolom **Closing Deal** (status DB: `closed_won`) dengan visual kembang api deal sukses!
+   * Jika ditolak, klik **Lost** (status DB: `closed_lost`).
+4. Klik pada kartu lead mana saja di papan Kanban akan memunculkan **Glassmorphic Sidebar Modal** di mana pengguna dapat membaca riwayat detail audit kehadiran digital, tautan eksternal, melacak status pipeline secara komprehensif, serta menuliskan catatan perkembangan negosiasi penjualan secara terperinci (autosave didukung).
