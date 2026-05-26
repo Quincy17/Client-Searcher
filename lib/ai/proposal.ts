@@ -58,7 +58,7 @@ Silakan generate proposal outreach untuk bisnis berikut:
     }
     
     messageText += `Sebagai perkenalan, kami sedang mengadakan program gratis pembuatan mockup/gambaran awal website khusus untuk bisnis terpilih di ${lead.city}. Boleh kami buatkan mockup gratis untuk ${lead.name}? Anda bisa melihat beberapa portfolio kami di sini: ${portfolioUrl}\n\n`;
-    messageText += `Kalau Kakak senggang, boleh kita ngobrol santai sebentar via WA? Terima kasih banyak atas waktunya dan sukses selalu untuk ${lead.name}! 🙏`;
+    messageText += `Kalau Kakak senggang, boleh kita ngobrol santai sebentar via WA? Terima kasih banyak atas waktunya dan sukses selalu untuk ${lead.name}!`;
 
     const miniAudit = lead.hasWebsite
       ? `Rating sangat baik (${lead.rating || "N/A"}) tetapi website digital belum optimal untuk mengonversi prospek.`

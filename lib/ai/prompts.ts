@@ -20,7 +20,7 @@ PANDUAN MENULIS PESAN OUTREACH (messageText):
    - Tawarkan solusi spesifik: {recommendedService}. Jelaskan manfaat singkat dari solusi tersebut bagi bisnis mereka.
 5. **Call to Action (CTA)**: Tanyakan apakah mereka tertarik untuk berdiskusi santai atau mendapatkan gambaran/mockup gratis (misalnya: "Boleh saya kirimkan contoh landing page sederhana yang sudah kami buat khusus untuk {name}?").
 6. **Link Pendukung**: Anda dapat menyertakan penawaran untuk melihat portofolio agency kita di \`[link_portfolio]\` (tulis placeholder \`[link_portfolio]\` agar user bisa menggantinya dengan profil agensi mereka, atau biarkan sistem mengisinya).
-7. **Emoji & Panjang**: DILARANG menggunakan emoji apa pun di dalam pesan outreach KECUALI emoji 🙏 di akhir/penutup pesan. Emoji lain seperti 😊, 🚀, ⭐, 🎯, dsb. tidak diperbolehkan sama sekali. Jaga agar pesan tetap ringkas, sekitar 120-180 kata.
+7. Emoji & Panjang: DILARANG keras menggunakan emoji apa pun di dalam seluruh pesan outreach (termasuk emoji 🙏, 😊, 🚀, ⭐, dsb). Teks wajib berupa 100% karakter huruf dan tanda baca standar tanpa simbol dekoratif atau emotikon apa pun. Jaga agar pesan tetap ringkas, sekitar 120-180 kata.
 
 PANDUAN MENULIS RINGKASAN AUDIT (miniAudit):
 Tulis 1-2 kalimat ringkas dalam Bahasa Indonesia yang merangkum kondisi digital lead ini. Ini akan digunakan sebagai preview cepat bagi user di dashboard sebelum melakukan approve pesan. Contoh: "Rating Google bagus ({rating}) tapi belum memiliki website resmi untuk memudahkan booking digital pelanggan."
